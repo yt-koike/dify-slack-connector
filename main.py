@@ -1,19 +1,20 @@
 import json
-import os
 import re
-import tempfile
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 import requests
 
 SLACK_BOT_TOKEN="xoxb-..."
 SLACK_APP_TOKEN="xapp-..."
+DIFY_ENDPOINT="IP or FQDN"
 DIFY_API_KEY_DEFAULT="app-..."
 DIFY_API_KEY_APP1="app-..."
 DIFY_API_KEY_APP2="app-..."
-channel_apikeys={"C0000000001":DIFY_API_KEY_APP1,"C0000000002":DIFY_API_KEY_APP2}
+DIFY_API_KEY_APP3="app-..."
+channel_apikeys={"C...":DIFY_API_KEY_APP1,"C...":DIFY_API_KEY_APP2,"C...":DIFY_API_KEY_APP3}
 ai_thread_ts_list = set()
-
+file_type_dict = {"document":["txt","md","mdx","markdown","pdf","html","htm","xlsx","xls","doc","docx","csv","eml","msg","pptx","ppt","xml","epub"],
+                  "image":["png","jpg","jpeg","gif","webp","svg"]}
 FILE_DIR = "/root/imgs/"
 
 def extractFilePaths(answer:str):
@@ -48,7 +49,7 @@ def upload_to_slack(filename:str,data:bytes):
 def upload_to_dify(user,filename:str,filedata:bytes,mimetype:str):   
     files = {'file': (filename, filedata, mimetype)}
     data = {'user': user}
-    url = 'http://100.98.35.73/v1/files/upload'
+    url = f'http://{DIFY_ENDPOINT}/v1/files/upload'
     headers = {'Authorization': 'Bearer '+DIFY_API_KEY_DEFAULT}
     response = requests.post(url,headers=headers, files=files,data=data)
     return response
@@ -63,7 +64,7 @@ def talk(event, say):
         dify_api_key = DIFY_API_KEY_DEFAULT
         if "channel" in event and event["channel"] in channel_apikeys:
             dify_api_key = channel_apikeys[event["channel"]]
-        url = 'http://100.98.35.73/v1/chat-messages'  # Dify API endpoint
+        url = f'http://{DIFY_ENDPOINT}/v1/chat-messages'  # Dify API endpoint
         user = event['user']
         query = event['text'].replace(
             f"<@{bot_user_id}>", "").strip()  # メンション部分を削除
@@ -78,11 +79,13 @@ def talk(event, say):
             filedata = download_from_slack(input_filepath)
             response = upload_to_dify(user,filename,filedata,"image/png")
             response_json = json.loads(response.text)
-            file_type_dict = {"png":"image","jpg":"image","pdf":"document"}
-            if filename.split(".")[-1] not in file_type_dict:
+            file_type = None
+            for ft in file_type_dict:
+                if filename.split(".")[-1] in file_type_dict[ft]:
+                    file_type=ft
+            if file_type is None:
                 say(f"{filename} は対応していないフォーマットのファイルです。")
                 continue
-            file_type = file_type_dict[filename.split(".")[-1]]
             file_uuid = response_json["id"]
             file = {"transfer_method":"local_file","type":file_type,"upload_file_id":file_uuid}
             input_files.append(file)
