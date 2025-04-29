@@ -16,11 +16,15 @@ ai_thread_ts_list = set()
 file_type_dict = {"document":["txt","md","mdx","markdown","pdf","html","htm","xlsx","xls","doc","docx","csv","eml","msg","pptx","ppt","xml","epub"],
                   "image":["png","jpg","jpeg","gif","webp","svg"]}
 FILE_DIR = "/root/imgs/"
+ai_thread_ts_list = set()
+file_type_dict = {"document":["txt","md","mdx","markdown","pdf","html","htm","xlsx","xls","doc","docx","csv","eml","msg","pptx","ppt","xml","epub"],
+                  "image":["png","jpg","jpeg","gif","webp","svg"]}
+FILE_DIR = "/root/imgs/"
 
 def extractFilePaths(answer:str):
     results = []
     for ext in ["png","wav"]:
-        results += re.findall(r'\[(.*\.'+ext+r')\]',answer)
+        results += re.findall(r'\[(.*?\.'+ext+r')\]',answer)
     if len(results) > 0:
         return results
     else:
@@ -46,7 +50,7 @@ def upload_to_slack(filename:str,data:bytes):
     except:
         return None
 
-def upload_to_dify(user,filename:str,filedata:bytes,mimetype:str):   
+def upload_to_dify(user,filename:str,filedata:bytes,mimetype:str):
     files = {'file': (filename, filedata, mimetype)}
     data = {'user': user}
     url = f'http://{DIFY_ENDPOINT}/v1/files/upload'
@@ -73,7 +77,7 @@ def talk(event, say):
             for fileinfo in event["files"]:
                 input_filepaths.append(fileinfo["url_private"])
         print("files",input_filepaths)
-        input_files = []        
+        input_files = []
         for input_filepath in input_filepaths:
             filename = input_filepath.split("/")[-1]
             filedata = download_from_slack(input_filepath)
@@ -90,7 +94,7 @@ def talk(event, say):
             file = {"transfer_method":"local_file","type":file_type,"upload_file_id":file_uuid}
             input_files.append(file)
         print("input_files",input_files)
-            
+
         thread_ts = None
         if "thread_ts" in event:
             thread_ts = event["thread_ts"]
@@ -126,10 +130,11 @@ def talk(event, say):
             if filePaths is None:
                 answer_str = response_data['answer']
             else:
-                for filepath in filePaths:
+                answer_str = ""
+                for imgId, filepath in enumerate(filePaths):
                     extention = filepath.split(".")[-1]
                     file_data = open(FILE_DIR+filepath,"rb").read()
-                    answer_str = upload_to_slack(f"result.{extention}",file_data)
+                    answer_str += upload_to_slack(f"result{imgId}.{extention}",file_data) + "\n"
             if thread_ts is None:
                 say(answer_str)
             else:
@@ -145,6 +150,8 @@ def talk(event, say):
 def handle_message(event, say):
     print("message",event)
     if "thread_ts" in event and event["thread_ts"] in ai_thread_ts_list:
+        talk(event,say)
+    elif "channel_type" in event and event["channel_type"]:
         talk(event,say)
 
 @app.event("app_mention")
