@@ -12,10 +12,7 @@ DIFY_API_KEY_APP1="app-..."
 DIFY_API_KEY_APP2="app-..."
 DIFY_API_KEY_APP3="app-..."
 channel_apikeys={"C...":DIFY_API_KEY_APP1,"C...":DIFY_API_KEY_APP2,"C...":DIFY_API_KEY_APP3}
-ai_thread_ts_list = set()
-file_type_dict = {"document":["txt","md","mdx","markdown","pdf","html","htm","xlsx","xls","doc","docx","csv","eml","msg","pptx","ppt","xml","epub"],
-                  "image":["png","jpg","jpeg","gif","webp","svg"]}
-FILE_DIR = "/root/imgs/"
+
 ai_thread_ts_list = set()
 file_type_dict = {"document":["txt","md","mdx","markdown","pdf","html","htm","xlsx","xls","doc","docx","csv","eml","msg","pptx","ppt","xml","epub"],
                   "image":["png","jpg","jpeg","gif","webp","svg"]}
@@ -38,6 +35,8 @@ conversation_ids = {}
 
 def upload_to_slack(filename:str,data:bytes):
     try:
+        if len(data) >= 2000000:
+            return None # too big
         new_file_place = app.client.files_getUploadURLExternal(filename=filename,length=len(data))
         if new_file_place['ok']:
             response_post_file = requests.post(
@@ -72,6 +71,8 @@ def talk(event, say):
         user = event['user']
         query = event['text'].replace(
             f"<@{bot_user_id}>", "").strip()  # メンション部分を削除
+        if len(query) == 0:
+            query = "(empty)"
         input_filepaths =[]
         if "files" in event:
             for fileinfo in event["files"]:
@@ -81,15 +82,24 @@ def talk(event, say):
         for input_filepath in input_filepaths:
             filename = input_filepath.split("/")[-1]
             filedata = download_from_slack(input_filepath)
-            response = upload_to_dify(user,filename,filedata,"image/png")
-            response_json = json.loads(response.text)
+            extention = filename.split(".")[-1]
             file_type = None
             for ft in file_type_dict:
-                if filename.split(".")[-1] in file_type_dict[ft]:
+                if extention in file_type_dict[ft]:
                     file_type=ft
             if file_type is None:
                 say(f"{filename} は対応していないフォーマットのファイルです。")
                 continue
+            if file_type == "image":
+                response = upload_to_dify(user,filename,filedata,"image/"+extention)
+            elif extention == "pdf":
+                response = upload_to_dify(user,filename,filedata,"application/pdf")
+            else:
+                response = upload_to_dify(user,filename,filedata,"application/octet-stream")
+            if response is None:
+                say("Upload error")
+                return
+            response_json = json.loads(response.text)
             file_uuid = response_json["id"]
             file = {"transfer_method":"local_file","type":file_type,"upload_file_id":file_uuid}
             input_files.append(file)
