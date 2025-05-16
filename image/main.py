@@ -224,7 +224,7 @@ class SlackDifyConnector:
                 "slack_channel_type": event["channel_type"],
                 "slack_timestamp": event["ts"],
                 "slack_thread_ts": thread_ts,
-                "slack_team": event["team"],
+                # "slack_team": event["team"],
             },
             "files": input_files,
         }
