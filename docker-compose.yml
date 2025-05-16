@@ -6,16 +6,16 @@ services:
     tty: true
     secrets:
       - slack_dify_secret
-  slack_dify_2:
-    build:
-      context: ./image
-      dockerfile: Dockerfile
-    tty: true
-    secrets:
-      - slack_dify_secret_2
+  #slack_dify_2:
+  #  build:
+  #    context: ./image
+  #    dockerfile: Dockerfile
+  #  tty: true
+  #  secrets:
+  #    - slack_dify_secret_2
 
 secrets:
   slack_dify_secret:
     file: ./.slack_dify_secret.yml
-  slack_dify_secret_2:
-    file: ./.slack_dify_secret_2.yml
+  #slack_dify_secret_2:
+  #  file: ./.slack_dify_secret_2.yml
