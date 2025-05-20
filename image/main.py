@@ -204,6 +204,7 @@ class SlackDifyConnector:
             thread_ts = event["thread_ts"]
         if "cleanclean" in query:
             self.slack.delete_replies(event["channel"], thread_ts)
+            return
         if len(query) == 0:
             query = "(empty)"
         try:
@@ -221,10 +222,9 @@ class SlackDifyConnector:
             "conversation_id": conversation_id,
             "inputs": {
                 "slack_channel": event["channel"],
-                "slack_channel_type": event["channel_type"],
+                "slack_channel_type": event["channel_type"] if "channel_type" in event else "",
                 "slack_timestamp": event["ts"],
                 "slack_thread_ts": thread_ts,
-                # "slack_team": event["team"],
             },
             "files": input_files,
         }
@@ -256,15 +256,13 @@ class SlackDifyConnector:
         if thread_ts is not None and "conversation_id" in dify_response:
             self.conversation_ids[thread_ts] = dify_response["conversation_id"]
 
+mentioned_thread_ts = set()
+secrets = Secrets()
+app = App(token=secrets.get_bot_token())
+sdc = SlackDifyConnector(secrets)
 
-if __name__ == "__main__":
-    mentioned_thread_ts = set()
-    secrets = Secrets()
-    sdc = SlackDifyConnector(secrets)
-    app = App(token=secrets.get_bot_token())
-
-    @app.event("app_mention")
-    def handle_app_mention(event, say):
+@app.event("app_mention")
+def handle_app_mention(event, say):
         print("app_mention", event)
         sdc.talk(event, say)
         thread_ts = event["ts"]
@@ -272,8 +270,8 @@ if __name__ == "__main__":
             thread_ts = event["thread_ts"]
         mentioned_thread_ts.add(thread_ts)
 
-    @app.event("message")
-    def handle_message(event, say):
+@app.event("message")
+def handle_message(event, say):
         print("message", event)
         if "thread_ts" in event and event["thread_ts"] in mentioned_thread_ts:
             # If in AI threads started by mentions
@@ -282,4 +280,5 @@ if __name__ == "__main__":
             # If direct message
             sdc.talk(event, say)
 
+if __name__ == "__main__":
     SocketModeHandler(app, secrets.get_app_token()).start()
