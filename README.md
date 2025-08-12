@@ -7,4 +7,4 @@ You'll need [App-level tokens](https://api.slack.com/concepts/token-types#app-le
 
 2. Rename `slack_dify_secret_template.yml` to `.slack_dify_secret.yml`.
 3. `docker compose up -d`
-4. If you want to stop it, type `docker compose up -d`.
+4. If you want to stop it, type `docker compose down`.
