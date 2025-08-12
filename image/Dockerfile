@@ -3,7 +3,7 @@ FROM python:3.12-slim
 RUN mkdir /app
 WORKDIR /app
 
-RUN apt update && apt upgrade
+RUN apt update && apt upgrade -y
 
 COPY requirements.txt .
 RUN pip install -r requirements.txt
