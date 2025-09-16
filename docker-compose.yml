@@ -3,7 +3,7 @@ services:
     build:
       context: ./image
       dockerfile: Dockerfile
-    tty: true
+    # image: docker.io/l125/dify-slack-connector
     secrets:
       - slack_dify_secret
   #slack_dify_2:
