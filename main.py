@@ -353,8 +353,8 @@ def run_cron():
             print(f"Cron failed: {e}")
         try:
             if "answer" in response and secrets.get_enable_cron_announce():
-                channel_id = response["answer"].split("\n")[0]
-                message = "\n".join(response["answer"].split("\n")[1:])
+                channel_id = response["answer"].split(" ")[0]
+                message = " ".join(response["answer"].split(" ")[1:])
                 sdc.slack.post_message(channel_id, message)
         except Exception as e:
             print(f"Cron announce failed: {e}")
