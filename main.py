@@ -64,11 +64,20 @@ class Secrets:
     def get_cron_interval(self):
         return self._secrets.get("cron_interval", 60)
 
+    def get_enable_monitor(self):
+        return self._secrets.get("enable_monitor", False)
+
     def get_mgmt_channel_id(self):
         return self._secrets.get("mgmt_channel_id", "")
 
     def get_monitor_interval(self):
         return self._secrets.get("monitor_interval", 60)
+
+    def get_ok_message(self):
+        return self._secrets.get("ok_message", "Dify's up!")
+
+    def get_down_alert_message(self):
+        return self._secrets.get("down_alert_message", "Dify's down!")
 
 
 class SlackClient:
@@ -313,10 +322,12 @@ def handle_message(event, say):
 
 def run_cron():
     if not secrets.get_enable_cron():
+        print("Cron disabled.")
         return
+    print("Cron enabled.")
+    cron_interval = secrets.get_cron_interval()
     while True:
-        time.sleep(secrets.get_cron_interval())
-        # print("Running cron...")
+        print("Running cron...")
         try:
             # We construct a minimal "event" or just call dify directly.
             # The requirement is "sends a message to Dify regulary".
@@ -331,17 +342,23 @@ def run_cron():
                 "query": secrets.get_cron_message(),
                 "response_mode": "blocking",
                 "user": "cron",
-                "inputs": {},
+                "inputs": {"is_cron": "yes"},
                 "files": [],
             }
             sdc.dify.query(full_query)
         except Exception as e:
             print(f"Cron failed: {e}")
+        time.sleep(cron_interval)
 
 
 def run_monitor():
+    if not secrets.get_enable_monitor():
+        print("Monitoring disabled.")
+        return
+    print("Monitoring enabled.")
     monitor_interval = secrets.get_monitor_interval()
     if monitor_interval <= 0:
+        print("Monitoring enabled but invalid interval.")
         return
 
     mgmt_channel = secrets.get_mgmt_channel_id()
@@ -350,8 +367,7 @@ def run_monitor():
         return
 
     while True:
-        time.sleep(monitor_interval)
-        # print("Running monitor...")
+        print("Running monitor...")
         try:
             full_query = {
                 "query": "ping",  # or usage of specific monitor message
@@ -363,15 +379,23 @@ def run_monitor():
             response = sdc.dify.query(full_query)
             if "answer" not in response:
                 raise Exception("Invalid response from Dify")
+            if len(secrets.get_ok_message()) > 0:
+                try:
+                    sdc.slack.post_message(mgmt_channel, secrets.get_ok_message())
+                except Exception as slack_e:
+                    print(f"Failed to send alert to Slack: {slack_e}")
         except Exception as e:
             print(f"Monitor failed: {e}")
             try:
-                sdc.slack.post_message(mgmt_channel, "Dify's down!")
+                sdc.slack.post_message(mgmt_channel, secrets.get_down_alert_message())
+                time.sleep(6*60*60) # wait for 6 hours until next check
             except Exception as slack_e:
                 print(f"Failed to send alert to Slack: {slack_e}")
+        time.sleep(monitor_interval)
 
 
 if __name__ == "__main__":
+    print("start")
     cron_thread = threading.Thread(target=run_cron)
     cron_thread.daemon = True
     cron_thread.start()
