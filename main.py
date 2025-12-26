@@ -4,6 +4,8 @@ import yaml
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 import requests
+import threading
+import time
 
 file_type_dict = {
     "document": [
@@ -53,6 +55,21 @@ class Secrets:
     def get_dify_api_key(self):
         return self._secrets["dify_api_key"]
 
+    def get_enable_cron(self):
+        return self._secrets.get("enable_cron", False)
+
+    def get_cron_message(self):
+        return self._secrets.get("cron_message", "ping")
+
+    def get_cron_interval(self):
+        return self._secrets.get("cron_interval", 60)
+
+    def get_mgmt_channel_id(self):
+        return self._secrets.get("mgmt_channel_id", "")
+
+    def get_monitor_interval(self):
+        return self._secrets.get("monitor_interval", 60)
+
 
 class SlackClient:
     def __init__(self, app_token, bot_token):
@@ -66,7 +83,7 @@ class SlackClient:
                 url="https://slack.com/api/auth.test", headers=headers
             ).json()
             return response["user_id"]
-        except:
+        except Exception:
             return ""
 
     def upload(self, file_name: str, file_data: bytes) -> str:
@@ -119,9 +136,17 @@ class SlackClient:
 
         for m in json["messages"]:
             requests.post(
-                f"https://slack.com/api/chat.delete?channel={channel}&ts={m["ts"]}",
+                f"https://slack.com/api/chat.delete?channel={channel}&ts={m['ts']}",
                 headers=headers,
             )
+
+    def post_message(self, channel, text):
+        headers = {"Authorization": "Bearer " + self.bot_token}
+        requests.post(
+            "https://slack.com/api/chat.postMessage",
+            headers=headers,
+            json={"channel": channel, "text": text},
+        )
 
 
 class DifyClient:
@@ -222,7 +247,9 @@ class SlackDifyConnector:
             "conversation_id": conversation_id,
             "inputs": {
                 "slack_channel": event["channel"],
-                "slack_channel_type": event["channel_type"] if "channel_type" in event else "",
+                "slack_channel_type": event["channel_type"]
+                if "channel_type" in event
+                else "",
                 "slack_timestamp": event["ts"],
                 "slack_thread_ts": thread_ts,
             },
@@ -256,29 +283,101 @@ class SlackDifyConnector:
         if thread_ts is not None and "conversation_id" in dify_response:
             self.conversation_ids[thread_ts] = dify_response["conversation_id"]
 
+
 mentioned_thread_ts = set()
 secrets = Secrets()
 app = App(token=secrets.get_bot_token())
 sdc = SlackDifyConnector(secrets)
 
+
 @app.event("app_mention")
 def handle_app_mention(event, say):
-        print("app_mention", event)
-        sdc.talk(event, say)
-        thread_ts = event["ts"]
-        if "thread_ts" in event:
-            thread_ts = event["thread_ts"]
-        mentioned_thread_ts.add(thread_ts)
+    print("app_mention", event)
+    sdc.talk(event, say)
+    thread_ts = event["ts"]
+    if "thread_ts" in event:
+        thread_ts = event["thread_ts"]
+    mentioned_thread_ts.add(thread_ts)
+
 
 @app.event("message")
 def handle_message(event, say):
-        print("message", event)
-        if "thread_ts" in event and event["thread_ts"] in mentioned_thread_ts:
-            # If in AI threads started by mentions
-            sdc.talk(event, say)
-        elif "channel_type" in event and event["channel_type"] == "im":
-            # If direct message
-            sdc.talk(event, say)
+    print("message", event)
+    if "thread_ts" in event and event["thread_ts"] in mentioned_thread_ts:
+        # If in AI threads started by mentions
+        sdc.talk(event, say)
+    elif "channel_type" in event and event["channel_type"] == "im":
+        # If direct message
+        sdc.talk(event, say)
+
+
+def run_cron():
+    if not secrets.get_enable_cron():
+        return
+    while True:
+        time.sleep(secrets.get_cron_interval())
+        # print("Running cron...")
+        try:
+            # We construct a minimal "event" or just call dify directly.
+            # The requirement is "sends a message to Dify regulary".
+            # It doesn't imply posting to Slack, but usually we want to see the output?
+            # "In cron feature, main.py sends a message to Dify regulary."
+            # "In monitoring feature, it sends a message regulary too but if there's no response from Dify, it sends 'Dify's down!' message to management."
+
+            # Using query directly.
+            # user and conversation_id are dummy or empty for cron?
+            # Dify API requires user.
+            full_query = {
+                "query": secrets.get_cron_message(),
+                "response_mode": "blocking",
+                "user": "cron",
+                "inputs": {},
+                "files": [],
+            }
+            sdc.dify.query(full_query)
+        except Exception as e:
+            print(f"Cron failed: {e}")
+
+
+def run_monitor():
+    monitor_interval = secrets.get_monitor_interval()
+    if monitor_interval <= 0:
+        return
+
+    mgmt_channel = secrets.get_mgmt_channel_id()
+    if not mgmt_channel:
+        print("Monitoring enabled but no mgmt channel configured.")
+        return
+
+    while True:
+        time.sleep(monitor_interval)
+        # print("Running monitor...")
+        try:
+            full_query = {
+                "query": "ping",  # or usage of specific monitor message
+                "response_mode": "blocking",
+                "user": "monitor",
+                "inputs": {},
+                "files": [],
+            }
+            response = sdc.dify.query(full_query)
+            if "answer" not in response:
+                raise Exception("Invalid response from Dify")
+        except Exception as e:
+            print(f"Monitor failed: {e}")
+            try:
+                sdc.slack.post_message(mgmt_channel, "Dify's down!")
+            except Exception as slack_e:
+                print(f"Failed to send alert to Slack: {slack_e}")
+
 
 if __name__ == "__main__":
+    cron_thread = threading.Thread(target=run_cron)
+    cron_thread.daemon = True
+    cron_thread.start()
+
+    monitor_thread = threading.Thread(target=run_monitor)
+    monitor_thread.daemon = True
+    monitor_thread.start()
+
     SocketModeHandler(app, secrets.get_app_token()).start()
