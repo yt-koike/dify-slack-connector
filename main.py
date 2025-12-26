@@ -79,6 +79,9 @@ class Secrets:
     def get_down_alert_message(self):
         return self._secrets.get("down_alert_message", "Dify's down!")
 
+    def get_enable_cron_announce(self):
+        return self._secrets.get("enable_cron_announce", False)
+
 
 class SlackClient:
     def __init__(self, app_token, bot_token):
@@ -345,9 +348,16 @@ def run_cron():
                 "inputs": {"is_cron": "yes"},
                 "files": [],
             }
-            sdc.dify.query(full_query)
+            response = sdc.dify.query(full_query)
         except Exception as e:
             print(f"Cron failed: {e}")
+        try:
+            if "answer" in response and secrets.get_enable_cron_announce():
+                channel_id = response["answer"].split("\n")[0]
+                message = "\n".join(response["answer"].split("\n")[1:])
+                sdc.slack.post_message(channel_id, message)
+        except Exception as e:
+            print(f"Cron announce failed: {e}")
         time.sleep(cron_interval)
 
 
@@ -388,7 +398,7 @@ def run_monitor():
             print(f"Monitor failed: {e}")
             try:
                 sdc.slack.post_message(mgmt_channel, secrets.get_down_alert_message())
-                time.sleep(6*60*60) # wait for 6 hours until next check
+                time.sleep(6 * 60 * 60)  # wait for 6 hours until next check
             except Exception as slack_e:
                 print(f"Failed to send alert to Slack: {slack_e}")
         time.sleep(monitor_interval)
