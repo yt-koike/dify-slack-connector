@@ -4,9 +4,11 @@ services:
       dockerfile_inline: |
         FROM ubuntu:24.04
         COPY init.sh /init.sh
+        RUN sed -i 's/\r//' /init.sh # Windows 対策
         CMD ["/bin/bash", "/init.sh"]
     volumes:
       - ./secrets:/secrets
+    network_mode: "none"
   slack_dify:
     build:
       dockerfile_inline: |
