@@ -1,21 +1,15 @@
 services:
+  init:
+    build:
+      dockerfile_inline: |
+        FROM ubuntu:24.04
+        COPY init.sh /init.sh
+        CMD ["/bin/bash", "/init.sh"]
+    volumes:
+      - ./secrets:/secrets
   slack_dify:
     build:
       context: .
       dockerfile: Dockerfile
-    # image: docker.io/l125/dify-slack-connector
-    secrets:
-      - slack_dify_secret
-  #slack_dify_2:
-  #  build:
-  #    context: ./image
-  #    dockerfile: Dockerfile
-  #  tty: true
-  #  secrets:
-  #    - slack_dify_secret_2
-
-secrets:
-  slack_dify_secret:
-    file: ./.slack_dify_secret.yml
-  #slack_dify_secret_2:
-  #  file: ./.slack_dify_secret_2.yml
+    volumes:
+      - ./secrets:/secrets:ro

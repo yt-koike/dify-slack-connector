@@ -36,9 +36,10 @@ file_type_dict = {
 
 class Secrets:
     def __init__(self):
-        secret_filename = os.listdir("/run/secrets/")[0]
-        with open("/run/secrets/" + secret_filename) as secret_file:
+        secret_filename = os.listdir("/secrets/")[0]
+        with open("/secrets/" + secret_filename) as secret_file:
             self._secrets = yaml.safe_load(secret_file)
+        print("Loaded: " + secret_filename)
 
     def get_bot_token(self):
         return self._secrets["slack_bot_token"]
@@ -405,13 +406,15 @@ def run_monitor():
 
 
 if __name__ == "__main__":
-    print("start")
-    cron_thread = threading.Thread(target=run_cron)
-    cron_thread.daemon = True
-    cron_thread.start()
+    print("Start", flush=True)
+    if secrets.get_enable_cron():
+        cron_thread = threading.Thread(target=run_cron)
+        cron_thread.daemon = True
+        cron_thread.start()
 
-    monitor_thread = threading.Thread(target=run_monitor)
-    monitor_thread.daemon = True
-    monitor_thread.start()
+    if secrets.get_enable_monitor():
+        monitor_thread = threading.Thread(target=run_monitor)
+        monitor_thread.daemon = True
+        monitor_thread.start()
 
     SocketModeHandler(app, secrets.get_app_token()).start()
