@@ -6,7 +6,7 @@ This software connects Dify and Slack.
 
 1. Copy `slack_dify_secret_template.yml` to `.slack_dify_secret.yml`.
 
-2. Fill in the `slack_dify_secret_template.yml` with your API keys.
+2. Fill in the `.slack_dify_secret.yml` with your API keys.
    You'll need [App-level tokens](https://api.slack.com/concepts/token-types#app-level) and [Bot tokens](https://api.slack.com/concepts/token-types#bot) for Slack.
 
 3. `docker compose up -d`
