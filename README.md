@@ -4,8 +4,8 @@ This software connects Dify and Slack.
 
 # How to use
 
-1. For initialisation, `docker compose run init`
-2. If you want to start it, `docker compose up slack_dify -d`
+1. For initialisation, `docker compose run init --build`
+2. If you want to start it, `docker compose up slack_dify -d --build`
 3. If you want to see the log, `docker compose logs -f`
 4. If you want to stop it, type `docker compose down`.
 
