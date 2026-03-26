@@ -39,7 +39,7 @@ class Secrets:
         secret_filename = os.listdir("/secrets/")[0]
         with open("/secrets/" + secret_filename) as secret_file:
             self._secrets = yaml.safe_load(secret_file)
-        print("Loaded: " + secret_filename)
+        print("Loaded: " + secret_filename, flush=True)
 
     def get_bot_token(self):
         return self._secrets["slack_bot_token"]
@@ -249,7 +249,7 @@ class SlackDifyConnector:
             input_files = self.get_input_files(event)
         except:
             pass
-        print("input_files", input_files)
+        print("input_files", input_files, flush=True)
         conversation_id = ""
         if thread_ts in self.conversation_ids:
             conversation_id = self.conversation_ids[thread_ts]
@@ -271,7 +271,7 @@ class SlackDifyConnector:
 
         say("Responding...", thread_ts=thread_ts)
         dify_response = self.dify.query(full_query)
-        print("dify_response", dify_response)
+        print("dify_response", dify_response, flush=True)
         if "answer" not in dify_response:
             say(
                 f"Unexprected response from Dify API: {dify_response}",
@@ -305,7 +305,7 @@ sdc = SlackDifyConnector(secrets)
 
 @app.event("app_mention")
 def handle_app_mention(event, say):
-    print("app_mention", event)
+    print("app_mention", event, flush=True)
     sdc.talk(event, say)
     thread_ts = event["ts"]
     if "thread_ts" in event:
@@ -315,7 +315,7 @@ def handle_app_mention(event, say):
 
 @app.event("message")
 def handle_message(event, say):
-    print("message", event)
+    print("message", event, flush=True)
     if "thread_ts" in event and event["thread_ts"] in mentioned_thread_ts:
         # If in AI threads started by mentions
         sdc.talk(event, say)
@@ -326,12 +326,12 @@ def handle_message(event, say):
 
 def run_cron():
     if not secrets.get_enable_cron():
-        print("Cron disabled.")
+        print("Cron disabled.", flush=True)
         return
-    print("Cron enabled.")
+    print("Cron enabled.", flush=True)
     cron_interval = secrets.get_cron_interval()
     while True:
-        print("Running cron...")
+        print("Running cron...", flush=True)
         try:
             # We construct a minimal "event" or just call dify directly.
             # The requirement is "sends a message to Dify regulary".
@@ -351,34 +351,34 @@ def run_cron():
             }
             response = sdc.dify.query(full_query)
         except Exception as e:
-            print(f"Cron failed: {e}")
+            print(f"Cron failed: {e}", flush=True)
         try:
             if "answer" in response and secrets.get_enable_cron_announce():
                 channel_id = response["answer"].split(" ")[0]
                 message = " ".join(response["answer"].split(" ")[1:])
                 sdc.slack.post_message(channel_id, message)
         except Exception as e:
-            print(f"Cron announce failed: {e}")
+            print(f"Cron announce failed: {e}", flush=True)
         time.sleep(cron_interval)
 
 
 def run_monitor():
     if not secrets.get_enable_monitor():
-        print("Monitoring disabled.")
+        print("Monitoring disabled.", flush=True)
         return
-    print("Monitoring enabled.")
+    print("Monitoring enabled.", flush=True)
     monitor_interval = secrets.get_monitor_interval()
     if monitor_interval <= 0:
-        print("Monitoring enabled but invalid interval.")
+        print("Monitoring enabled but invalid interval.", flush=True)
         return
 
     mgmt_channel = secrets.get_mgmt_channel_id()
     if not mgmt_channel:
-        print("Monitoring enabled but no mgmt channel configured.")
+        print("Monitoring enabled but no mgmt channel configured.", flush=True)
         return
 
     while True:
-        print("Running monitor...")
+        print("Running monitor...", flush=True)
         try:
             full_query = {
                 "query": "ping",  # or usage of specific monitor message
@@ -394,14 +394,14 @@ def run_monitor():
                 try:
                     sdc.slack.post_message(mgmt_channel, secrets.get_ok_message())
                 except Exception as slack_e:
-                    print(f"Failed to send alert to Slack: {slack_e}")
+                    print(f"Failed to send alert to Slack: {slack_e}", flush=True)
         except Exception as e:
-            print(f"Monitor failed: {e}")
+            print(f"Monitor failed: {e}", flush=True)
             try:
                 sdc.slack.post_message(mgmt_channel, secrets.get_down_alert_message())
                 time.sleep(6 * 60 * 60)  # wait for 6 hours until next check
             except Exception as slack_e:
-                print(f"Failed to send alert to Slack: {slack_e}")
+                print(f"Failed to send alert to Slack: {slack_e}", flush=True)
         time.sleep(monitor_interval)
 
 
